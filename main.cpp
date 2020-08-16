@@ -157,7 +157,7 @@ bool check_parameters(processing_settings& settings)
     return true;
 }
 
-void parsing_process_unpack_partition(std::ifstream& fw_file_stream, firmware_file_header &fw_header, int partition_index)
+bool parsing_process_unpack_partition(std::ifstream& fw_file_stream, firmware_file_header &fw_header, int partition_index)
 {
     // Reading partiton header
     partition_header partition_header;
@@ -170,6 +170,12 @@ void parsing_process_unpack_partition(std::ifstream& fw_file_stream, firmware_fi
     std::cout << "Magic: 0x" << partition_header.magic << std::endl;
     std::cout << std::dec;
 
+    if (partition_header.magic != PARTITION_HEADER_MAGIC)
+    {
+        std::cout << "Error! Partition magic is not 0x" << std::hex << PARTITION_HEADER_MAGIC << std::dec << std::endl;
+        return false;
+    }
+
     auto fw_partition_name = std::string(output_folder_name) + '/' + partition_names[partition_index] + ".bin";
     std::ofstream fw_partition_stream(fw_partition_name, std::ios::out | std::ios::binary);
     if (!fw_partition_stream.is_open())
@@ -180,7 +186,7 @@ void parsing_process_unpack_partition(std::ifstream& fw_file_stream, firmware_fi
         fw_file_stream.seekg(fw_file_stream.tellg() + partition_header.data_size);
 
         fw_partition_stream.close();
-        return;
+        return true;
     }
 
     uint8_t* partition_data = new uint8_t[partition_header.data_size];
@@ -189,6 +195,7 @@ void parsing_process_unpack_partition(std::ifstream& fw_file_stream, firmware_fi
     delete [] partition_data;
 
     fw_partition_stream.close();
+    return true;
 }
 
 void parsing_process_unpack(char* fw_file_path)
@@ -223,7 +230,7 @@ void parsing_process_unpack(char* fw_file_path)
         std::cout << "> Partition " << i << " (" << partition_names[i] << "):" << std::hex << std::endl;
         std::cout << "Size in FW file: 0x" << fw_header.partition_infos[i].size_in_fw_file << std::endl;
         std::cout << "Size in memory:  0x" << fw_header.partition_sizes_in_memory[i] << std::endl;
-        std::cout << "Size in memory:  0x" << fw_header.partition_infos[i].b << std::endl;
+        std::cout << "CRC32:           0x" << fw_header.partition_infos[i].crc32 << std::endl;
         std::cout << std::dec << std::endl;
 
         if (fw_header.partition_infos[i].size_in_fw_file != 0)
@@ -300,7 +307,12 @@ void parsing_process_unpack(char* fw_file_path)
         std::cout << ">> Partition starts at offset: " << pre_pos << std::endl;
         std::cout << ">> Expecting partition end offset: " << (uint32_t)pre_pos + fw_header.partition_infos[partition_indexes[i]].size_in_fw_file << std::endl;
 
-        parsing_process_unpack_partition(fw_file_stream, fw_header, partition_indexes[i]);
+        if(!parsing_process_unpack_partition(fw_file_stream, fw_header, partition_indexes[i]))
+        {
+            std::cout << "Error occured while parsing partition." << std::endl;
+            fw_file_stream.close();
+            return;
+        }
 
         std::cout << ">> Partition actual end offset: " << fw_file_stream.tellg() << std::endl << std::endl;
 

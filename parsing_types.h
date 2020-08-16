@@ -3,6 +3,7 @@
 // WARNING! ALL THESE DEFINES AND TYPES ARE USEFUL ONLY FOR Z-Cam E1 CAMERA FW FILE!
 
 #define FW_PARTITION_COUNT 15
+#define PARTITION_HEADER_MAGIC 0xA324EB90
 
 const char* output_folder_name = "E1_fw_unpacked";
 
@@ -34,7 +35,7 @@ struct firmware_file_header
     struct
     {
         uint32_t size_in_fw_file;
-        uint32_t b;                             // Unknown field
+        uint32_t crc32;
     } partition_infos[FW_PARTITION_COUNT];
     uint32_t partition_sizes_in_memory[FW_PARTITION_COUNT];
     uint32_t bluetooth_fw_partition_size;
