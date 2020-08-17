@@ -233,7 +233,9 @@ void parsing_process_unpack(char* fw_file_path)
     ini_info[INI_SECTION__FW_HEADER][INI_SECTION__FW_HEADER__MODEL_NAME] = std::string((char*)fw_header.model_name);
     std::cout << "Model name: " << fw_header.model_name << std::endl;
 
-    ini_info[INI_SECTION__FW_HEADER][INI_SECTION__FW_HEADER__VERSION] = std::to_string(fw_header.version_major) + '.' + std::to_string(fw_header.version_minor);
+    ini_info[INI_SECTION__FW_HEADER][INI_SECTION__FW_HEADER__VERSION_MAJOR] = std::to_string(fw_header.version_major);
+    ini_info[INI_SECTION__FW_HEADER][INI_SECTION__FW_HEADER__VERSION_MINOR] = std::to_string(fw_header.version_minor);
+
     std::cout << "Firmware version: " << fw_header.version_major << '.' << fw_header.version_minor << std::endl << std::endl;
 
     std::vector<int> partition_indexes;
@@ -351,9 +353,88 @@ void parsing_process_unpack(char* fw_file_path)
     fw_file_stream.close();
 }
 
+bool is_number(const std::string& s)
+{
+    return !s.empty() && std::find_if(s.begin(), s.end(), [](unsigned char c) { return !std::isdigit(c); }) == s.end();
+}
+
+bool stoi_nothrow(std::string str, uint32_t& out)
+{
+    try
+    {
+        if (!is_number(str))
+            return false;
+        out = std::stoi(str);
+    }
+    catch(const std::exception& e)
+    {
+        return false;
+    }
+
+    return true;
+}
+
 void parsing_process_pack(char* fw_folder_path)
 {
+    std::cout << std::endl << "=== Packing process ===" << std::endl << std::endl;
 
+    // Input INI data
+    ini_info_t ini_info = ini_load(std::string(fw_folder_path) + '/' + unpacked_firmware_settings_name);
+    
+    if (ini_info.find(INI_SECTION__FW_HEADER) == ini_info.end())
+    {
+        std::cout << "Error! No [" << INI_SECTION__FW_HEADER << "] section found." << std::endl;
+        return;
+    }
+
+    auto& ini_fw_header = ini_info[INI_SECTION__FW_HEADER];
+    if (ini_fw_header.find(INI_SECTION__FW_HEADER__MODEL_NAME) == ini_fw_header.end())
+    {
+        std::cout << "Warning! No \"" << INI_SECTION__FW_HEADER__MODEL_NAME << "\" parameter found. Using default : \"" << default_model_name << "\"." << std::endl;
+        ini_fw_header[INI_SECTION__FW_HEADER__MODEL_NAME] = default_model_name;
+    }
+
+    auto model_name = ini_fw_header[INI_SECTION__FW_HEADER__MODEL_NAME];
+    if (model_name != default_model_name)
+        std::cout << "Warning! Custom model name is used (" << model_name << ")! Be careful!" << std::endl;
+
+    if (model_name.size() > 31)
+    {
+        std::cout << "Error! Model name is too long (" << model_name << ")! Only 31 symbols are allowed!" << std::endl;
+        return;
+    }
+
+    // Show model name
+    std::cout << "Model name: " << model_name << std::endl;
+
+    if (ini_fw_header.find(INI_SECTION__FW_HEADER__VERSION_MAJOR) == ini_fw_header.end())
+    {
+        std::cout << "Error! Major version parameter (" << INI_SECTION__FW_HEADER__VERSION_MAJOR << ") not found!" << std::endl;
+        return;
+    }
+
+    if (ini_fw_header.find(INI_SECTION__FW_HEADER__VERSION_MINOR) == ini_fw_header.end())
+    {
+        std::cout << "Error! Minor version parameter (" << INI_SECTION__FW_HEADER__VERSION_MAJOR << ") not found!" << std::endl;
+        return;
+    }
+
+    uint32_t v_maj = -1, v_min = -1;
+    if (!stoi_nothrow(ini_fw_header[INI_SECTION__FW_HEADER__VERSION_MAJOR], v_maj))
+    {
+        std::cout << "Error! Could not interpret firmware major version (" << ini_fw_header[INI_SECTION__FW_HEADER__VERSION_MAJOR] << ") as integer!" << std::endl;
+        return;
+    }
+    if (!stoi_nothrow(ini_fw_header[INI_SECTION__FW_HEADER__VERSION_MINOR], v_min))
+    {
+        std::cout << "Error! Could not interpret firmware minor version (" << ini_fw_header[INI_SECTION__FW_HEADER__VERSION_MINOR] << ") as integer!" << std::endl;
+        return;
+    }
+
+    // Show version
+    std::cout << "Version: " << v_maj << '.' << v_min << std::endl;
+
+    
 }
 
 void parsing_process(processing_settings& settings)

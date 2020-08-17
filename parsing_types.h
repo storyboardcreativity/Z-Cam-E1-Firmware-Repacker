@@ -10,12 +10,15 @@
 #define INI_SECTION__UNKNOWN_DATA "unknown_data"
 
 #define INI_SECTION__FW_HEADER__MODEL_NAME "model_name"
-#define INI_SECTION__FW_HEADER__VERSION "version"
+#define INI_SECTION__FW_HEADER__VERSION_MAJOR "version_major"
+#define INI_SECTION__FW_HEADER__VERSION_MINOR "version_minor"
 
 #define INI_SECTION__PARTITION__ENABLED "enabled"
 #define INI_SECTION__PARTITION__SIZE_IN_MEMORY "size_in_memory"
 #define INI_SECTION__PARTITION__OFFSET_IN_MEMORY "offset_in_memory"
 #define INI_SECTION__PARTITION__SOURCE_FILE_NAME "source_file_name"
+
+const char* default_model_name = "E1";
 
 const char* output_folder_name = "E1_fw_unpacked";
 
