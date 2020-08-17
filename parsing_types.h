@@ -20,6 +20,8 @@
 #define INI_SECTION__PARTITION__DATE_MONTH "date_month"
 #define INI_SECTION__PARTITION__DATE_YEAR "date_year"
 #define INI_SECTION__PARTITION__SOURCE_FILE_NAME "source_file_name"
+#define INI_SECTION__PARTITION__UNK_0 "unknown_field_0"
+#define INI_SECTION__PARTITION__UNK_1 "unknown_field_1"
 
 const char* default_model_name = "E1";
 
@@ -65,7 +67,7 @@ const uint32_t partition_default_sizes_in_memory[FW_PARTITION_COUNT]
     0xC00000,
     0x40000,
     0x100000,
-    0x0//!!!
+    0x3E105
 };
 
 #pragma pack (push, 1)

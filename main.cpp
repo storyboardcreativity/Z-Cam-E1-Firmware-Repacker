@@ -5,6 +5,7 @@
 #include <iterator>
 #include <algorithm>
 #include <map>
+#include <zlib.h>
 
 #include <sys/stat.h>
 
@@ -169,6 +170,8 @@ bool parsing_process_unpack_partition(ini_info_t& ini_info, std::ifstream& fw_fi
     ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[partition_index]][INI_SECTION__PARTITION__DATE_DAY] = std::to_string((uint32_t)partition_header.date_day);
     ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[partition_index]][INI_SECTION__PARTITION__DATE_MONTH] = std::to_string((uint32_t)partition_header.date_month);
     ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[partition_index]][INI_SECTION__PARTITION__DATE_YEAR] = std::to_string((uint32_t)partition_header.date_year);
+    ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[partition_index]][INI_SECTION__PARTITION__UNK_0] = std::to_string(partition_header.__unk0);
+    ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[partition_index]][INI_SECTION__PARTITION__UNK_1] = std::to_string(partition_header.__unk1);
 
     std::cout << std::hex;
     std::cout << "CRC32: 0x" << partition_header.crc32 << std::endl;
@@ -375,13 +378,13 @@ bool is_number(const std::string& s)
     return !s.empty() && std::find_if(s.begin(), s.end(), [](unsigned char c) { return !std::isdigit(c); }) == s.end();
 }
 
-bool stoi_nothrow(std::string str, uint32_t& out)
+bool stoul_nothrow(std::string str, uint32_t& out)
 {
     try
     {
         if (!is_number(str))
             return false;
-        out = std::stoi(str);
+        out = std::stoul(str);
     }
     catch(const std::exception& e)
     {
@@ -423,6 +426,18 @@ void parsing_process_pack(char* fw_folder_path)
         return;
     }
 
+    // Set unknown data
+    auto unknown_data_map = ini_info.find(INI_SECTION__UNKNOWN_DATA)->second;
+    for (auto it = unknown_data_map.begin(); it != unknown_data_map.end(); ++it)
+    {
+        uint32_t index = 0;
+        stoul_nothrow(it->first.substr(1), index);
+        uint32_t value = 0;
+        stoul_nothrow(it->second, value);
+
+        fw_file_header.unknown[index] = value;
+    }
+
     // Set model name
     strncpy((char*)fw_file_header.model_name, model_name.c_str(), 31);
     std::cout << "Model name: " << model_name << std::endl;
@@ -440,12 +455,12 @@ void parsing_process_pack(char* fw_folder_path)
     }
 
     uint32_t v_maj = -1, v_min = -1;
-    if (!stoi_nothrow(ini_fw_header[INI_SECTION__FW_HEADER__VERSION_MAJOR], v_maj))
+    if (!stoul_nothrow(ini_fw_header[INI_SECTION__FW_HEADER__VERSION_MAJOR], v_maj))
     {
         std::cout << "Error! Could not interpret firmware major version (" << ini_fw_header[INI_SECTION__FW_HEADER__VERSION_MAJOR] << ") as integer!" << std::endl;
         return;
     }
-    if (!stoi_nothrow(ini_fw_header[INI_SECTION__FW_HEADER__VERSION_MINOR], v_min))
+    if (!stoul_nothrow(ini_fw_header[INI_SECTION__FW_HEADER__VERSION_MINOR], v_min))
     {
         std::cout << "Error! Could not interpret firmware minor version (" << ini_fw_header[INI_SECTION__FW_HEADER__VERSION_MINOR] << ") as integer!" << std::endl;
         return;
@@ -468,8 +483,11 @@ void parsing_process_pack(char* fw_folder_path)
         {
             std::cout << "Partition is not found. Setting as empty." << std::endl << std::endl;
 
-            fw_file_header.partition_infos[i].size_in_fw_file = 0;
-            fw_file_header.partition_infos[i].crc32 = 0;
+            if (i != FW_PARTITION_COUNT - 1)
+            {
+                fw_file_header.partition_infos[i].size_in_fw_file = 0;
+                fw_file_header.partition_infos[i].crc32 = 0;
+            }
             fw_file_header.partition_sizes_in_memory[i] = partition_default_sizes_in_memory[i];
 
             continue;
@@ -491,8 +509,11 @@ void parsing_process_pack(char* fw_folder_path)
         {
             std::cout << "Partition is disabled. Setting as empty." << std::endl << std::endl;
 
-            fw_file_header.partition_infos[i].size_in_fw_file = 0;
-            fw_file_header.partition_infos[i].crc32 = 0;
+            if (i != FW_PARTITION_COUNT - 1)
+            {
+                fw_file_header.partition_infos[i].size_in_fw_file = 0;
+                fw_file_header.partition_infos[i].crc32 = 0;
+            }
             fw_file_header.partition_sizes_in_memory[i] = partition_default_sizes_in_memory[i];
 
             continue;
@@ -527,12 +548,33 @@ void parsing_process_pack(char* fw_folder_path)
         uint32_t partition_date_day = 0;
         uint32_t partition_date_month = 0;
         uint32_t partition_date_year = 0;
-        stoi_nothrow(partition_date_day_it->second, partition_date_day);
-        stoi_nothrow(partition_date_month_it->second, partition_date_month);
-        stoi_nothrow(partition_date_year_it->second, partition_date_year);
+        stoul_nothrow(partition_date_day_it->second, partition_date_day);
+        stoul_nothrow(partition_date_month_it->second, partition_date_month);
+        stoul_nothrow(partition_date_year_it->second, partition_date_year);
         partition_header.date_day = partition_date_day;
         partition_header.date_month = partition_date_month;
         partition_header.date_year = partition_date_year;
+
+        // Get unknown fields
+        auto partition_unk_0_it = ini_fw_partition.find(INI_SECTION__PARTITION__UNK_0);
+        auto partition_unk_1_it = ini_fw_partition.find(INI_SECTION__PARTITION__UNK_1);
+        uint32_t partition_unk_0 = 0, partition_unk_1 = 0;
+        stoul_nothrow(partition_unk_0_it->second, partition_unk_0);
+        stoul_nothrow(partition_unk_1_it->second, partition_unk_1);
+        partition_header.__unk0 = partition_unk_0;
+        partition_header.__unk1 = partition_unk_1;
+
+        // Get size in memory
+        auto partition_size_in_memory_it = ini_fw_partition.find(INI_SECTION__PARTITION__SIZE_IN_MEMORY);
+        uint32_t partition_size_in_memory = 0;
+        stoul_nothrow(partition_size_in_memory_it->second, partition_size_in_memory);
+        fw_file_header.partition_sizes_in_memory[i] = partition_size_in_memory;
+
+        // Get offset in memory
+        auto partition_offset_in_memory_it = ini_fw_partition.find(INI_SECTION__PARTITION__OFFSET_IN_MEMORY);
+        uint32_t partition_offset_in_memory = 0;
+        stoul_nothrow(partition_offset_in_memory_it->second, partition_offset_in_memory);
+        partition_header.offset_in_device_memory = partition_offset_in_memory;
 
         // Get data source file name
         auto partition_source_file_name_it = ini_fw_partition.find(INI_SECTION__PARTITION__SOURCE_FILE_NAME);
@@ -550,11 +592,23 @@ void parsing_process_pack(char* fw_folder_path)
         partition_file.read((char*)ptr, data_size);
         partition_file.close();
 
+        // Calculate CRC32 for partition data
+        partition_header.crc32 = crc32(0, ptr, data_size);
+
         // Save partition data
         partition_datas.push_back(ptr);
 
         // Save partition header
         partition_headers.push_back(partition_header);
+
+        if (i != FW_PARTITION_COUNT - 1)
+        {
+            // Set partition size (including header)
+            fw_file_header.partition_infos[i].size_in_fw_file = sizeof(partition_header) + data_size;
+
+            // Set partition CRC32 (including header)
+            fw_file_header.partition_infos[i].crc32 = crc32(crc32(0, (uint8_t*)&partition_header, sizeof(partition_header)), ptr, data_size);
+        }
 
         std::cout << std::endl;
     }
@@ -562,6 +616,9 @@ void parsing_process_pack(char* fw_folder_path)
     std::ofstream fw_file_stream(output_file_name, std::ios::out | std::ios::binary | std::ios::trunc);
     if (!fw_file_stream.is_open())
         return;
+
+    // Calculate CRC32 for firmware file header
+    fw_file_header.crc32 = crc32(0, (uint8_t*)&fw_file_header, sizeof(firmware_file_header) - 4);
 
     // Write firmware file header
     fw_file_stream.write((char*)&fw_file_header, sizeof(firmware_file_header));
