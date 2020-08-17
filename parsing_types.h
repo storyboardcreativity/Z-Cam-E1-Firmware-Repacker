@@ -16,6 +16,9 @@
 #define INI_SECTION__PARTITION__ENABLED "enabled"
 #define INI_SECTION__PARTITION__SIZE_IN_MEMORY "size_in_memory"
 #define INI_SECTION__PARTITION__OFFSET_IN_MEMORY "offset_in_memory"
+#define INI_SECTION__PARTITION__DATE_DAY "date_day"
+#define INI_SECTION__PARTITION__DATE_MONTH "date_month"
+#define INI_SECTION__PARTITION__DATE_YEAR "date_year"
 #define INI_SECTION__PARTITION__SOURCE_FILE_NAME "source_file_name"
 
 const char* default_model_name = "E1";
@@ -65,7 +68,10 @@ struct firmware_file_header
 struct partition_header
 {
     uint32_t crc32;
-    uint32_t __unk0[2];
+    uint32_t __unk0[1];
+    uint8_t date_day;
+    uint8_t date_month;
+    uint16_t date_year;
     uint32_t data_size;
     uint32_t offset_in_device_memory;
     uint32_t __unk1[1];

@@ -166,9 +166,15 @@ bool parsing_process_unpack_partition(ini_info_t& ini_info, std::ifstream& fw_fi
     fw_file_stream.read((char*)&partition_header, sizeof(partition_header));
 
     ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[partition_index]][INI_SECTION__PARTITION__OFFSET_IN_MEMORY] = std::to_string(partition_header.offset_in_device_memory);
+    ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[partition_index]][INI_SECTION__PARTITION__DATE_DAY] = std::to_string((uint32_t)partition_header.date_day);
+    ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[partition_index]][INI_SECTION__PARTITION__DATE_MONTH] = std::to_string((uint32_t)partition_header.date_month);
+    ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[partition_index]][INI_SECTION__PARTITION__DATE_YEAR] = std::to_string((uint32_t)partition_header.date_year);
 
     std::cout << std::hex;
     std::cout << "CRC32: 0x" << partition_header.crc32 << std::endl;
+    std::cout << std::dec;
+    std::cout << "Date: " << (uint32_t)partition_header.date_day << '.' << (uint32_t)partition_header.date_month << '.' << (uint32_t)partition_header.date_year << std::endl;
+    std::cout << std::hex;
     std::cout << "Data Size: 0x" << partition_header.data_size << std::endl;
     std::cout << "Offset in device memory: 0x" << partition_header.offset_in_device_memory << std::endl;
     std::cout << "Magic: 0x" << partition_header.magic << std::endl;
