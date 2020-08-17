@@ -103,7 +103,7 @@ bool process_packing_params(processing_settings& settings, int argc, char* argv[
         return false;
     }
 
-    settings.firmware_file_path = argv[i + 1];
+    settings.firmware_folder_path = argv[i + 1];
     i += 2;
 
     return true;
