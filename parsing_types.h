@@ -2,7 +2,7 @@
 
 // WARNING! ALL THESE DEFINES AND TYPES ARE USEFUL ONLY FOR Z-Cam E1 CAMERA FW FILE!
 
-#define FW_PARTITION_COUNT 15
+#define FW_PARTITION_COUNT 16
 #define PARTITION_HEADER_MAGIC 0xA324EB90
 
 #define INI_SECTION__FW_HEADER "firmware_header"
@@ -44,7 +44,8 @@ const char* partition_names[FW_PARTITION_COUNT]
     "Storage 2",
     "Index For Video Recording",
     "User Settings",
-    "Calibration Data"
+    "Calibration Data",
+    "Bluetooth Firmware"
 };
 
 const uint32_t partition_default_sizes_in_memory[FW_PARTITION_COUNT]
@@ -63,7 +64,8 @@ const uint32_t partition_default_sizes_in_memory[FW_PARTITION_COUNT]
     0x500000,
     0xC00000,
     0x40000,
-    0x100000
+    0x100000,
+    0x0//!!!
 };
 
 #pragma pack (push, 1)
@@ -75,13 +77,13 @@ struct firmware_file_header
             model_name[i] = '\0';
         version_major = 0;
         version_minor = 0;
-        for (int i = 0; i < FW_PARTITION_COUNT; ++i)
+        for (int i = 0; i < FW_PARTITION_COUNT - 1; ++i)
         {
             partition_infos[i].size_in_fw_file = 0;
             partition_infos[i].crc32 = 0;
-            partition_sizes_in_memory[i] = 0;
         }
-        bluetooth_fw_partition_size = 0;
+        for (int i = 0; i < FW_PARTITION_COUNT; ++i)
+            partition_sizes_in_memory[i] = 0;
         for (int i = 0; i < 7; ++i)
             unknown[i] = 0;
         crc32 = 0;
@@ -94,9 +96,8 @@ struct firmware_file_header
     {
         uint32_t size_in_fw_file;
         uint32_t crc32;
-    } partition_infos[FW_PARTITION_COUNT];
+    } partition_infos[FW_PARTITION_COUNT - 1];
     uint32_t partition_sizes_in_memory[FW_PARTITION_COUNT];
-    uint32_t bluetooth_fw_partition_size;
     uint32_t unknown[7];                        // Unknown field
     uint32_t crc32;
 };

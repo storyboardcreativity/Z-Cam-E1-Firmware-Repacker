@@ -159,7 +159,7 @@ bool check_parameters(processing_settings& settings)
     return true;
 }
 
-bool parsing_process_unpack_partition(ini_info_t& ini_info, std::ifstream& fw_file_stream, firmware_file_header &fw_header, int partition_index)
+bool parsing_process_unpack_partition(ini_info_t& ini_info, std::ifstream& fw_file_stream, int partition_index)
 {
     // Reading partiton header
     partition_header partition_header;
@@ -250,12 +250,18 @@ void parsing_process_unpack(char* fw_file_path)
         ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[i]][INI_SECTION__PARTITION__ENABLED] = "0";
 
         std::cout << "> Partition " << i << " (" << partition_names[i] << "):" << std::hex << std::endl;
-        std::cout << "Size in FW file: 0x" << fw_header.partition_infos[i].size_in_fw_file << std::endl;
+
+        if (i != FW_PARTITION_COUNT - 1)
+            std::cout << "Size in FW file: 0x" << fw_header.partition_infos[i].size_in_fw_file << std::endl;
+
         std::cout << "Size in memory:  0x" << fw_header.partition_sizes_in_memory[i] << std::endl;
-        std::cout << "CRC32:           0x" << fw_header.partition_infos[i].crc32 << std::endl;
+
+        if (i != FW_PARTITION_COUNT - 1)
+            std::cout << "CRC32:           0x" << fw_header.partition_infos[i].crc32 << std::endl;
+
         std::cout << std::dec << std::endl;
 
-        if (fw_header.partition_infos[i].size_in_fw_file != 0)
+        if ((i == FW_PARTITION_COUNT - 1 && fw_header.partition_sizes_in_memory[i] != 0) || fw_header.partition_infos[i].size_in_fw_file != 0)
         {
             ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[i]][INI_SECTION__PARTITION__ENABLED] = "1";
             ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[i]][INI_SECTION__PARTITION__SIZE_IN_MEMORY] = std::to_string(fw_header.partition_sizes_in_memory[i]);
@@ -333,23 +339,28 @@ void parsing_process_unpack(char* fw_file_path)
 
         auto pre_pos = fw_file_stream.tellg();
         std::cout << ">> Partition starts at offset: " << pre_pos << std::endl;
-        std::cout << ">> Expecting partition end offset: " << (uint32_t)pre_pos + fw_header.partition_infos[partition_indexes[i]].size_in_fw_file << std::endl;
 
-        if(!parsing_process_unpack_partition(ini_info, fw_file_stream, fw_header, partition_indexes[i]))
+        if (partition_indexes[i] != FW_PARTITION_COUNT - 1)
+            std::cout << ">> Expecting partition end offset: " << (uint32_t)pre_pos + fw_header.partition_infos[partition_indexes[i]].size_in_fw_file << std::endl;
+
+        if(!parsing_process_unpack_partition(ini_info, fw_file_stream, partition_indexes[i]))
         {
             std::cout << "Error occured while parsing partition." << std::endl;
             fw_file_stream.close();
             return;
         }
 
-        std::cout << ">> Partition actual end offset: " << fw_file_stream.tellg() << std::endl << std::endl;
-
-        if (fw_file_stream.tellg() != (uint32_t)pre_pos + fw_header.partition_infos[partition_indexes[i]].size_in_fw_file)
+        if (partition_indexes[i] != FW_PARTITION_COUNT - 1)
         {
-            std::cout << "Error! Partition borders are corrupted in header!" << std::endl;
-            std::cout << "Expected partition end offset: " << (uint32_t)pre_pos + fw_header.partition_infos[partition_indexes[i]].size_in_fw_file << std::endl;
-            fw_file_stream.close();
-            return;
+            std::cout << ">> Partition actual end offset: " << fw_file_stream.tellg() << std::endl << std::endl;
+
+            if (fw_file_stream.tellg() != (uint32_t)pre_pos + fw_header.partition_infos[partition_indexes[i]].size_in_fw_file)
+            {
+                std::cout << "Error! Partition borders are corrupted in header!" << std::endl;
+                std::cout << "Expected partition end offset: " << (uint32_t)pre_pos + fw_header.partition_infos[partition_indexes[i]].size_in_fw_file << std::endl;
+                fw_file_stream.close();
+                return;
+            }
         }
     }
 
