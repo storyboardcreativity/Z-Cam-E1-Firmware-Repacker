@@ -393,6 +393,8 @@ void parsing_process_pack(char* fw_folder_path)
         return;
     }
 
+    // Firmware Header
+    firmware_file_header fw_file_header;
     auto& ini_fw_header = ini_info[INI_SECTION__FW_HEADER];
     if (ini_fw_header.find(INI_SECTION__FW_HEADER__MODEL_NAME) == ini_fw_header.end())
     {
@@ -410,7 +412,8 @@ void parsing_process_pack(char* fw_folder_path)
         return;
     }
 
-    // Show model name
+    // Set model name
+    strncpy((char*)fw_file_header.model_name, model_name.c_str(), 31);
     std::cout << "Model name: " << model_name << std::endl;
 
     if (ini_fw_header.find(INI_SECTION__FW_HEADER__VERSION_MAJOR) == ini_fw_header.end())
@@ -437,10 +440,134 @@ void parsing_process_pack(char* fw_folder_path)
         return;
     }
 
-    // Show version
+    // Set firmware version
+    fw_file_header.version_major = v_maj;
+    fw_file_header.version_minor = v_min;
     std::cout << "Version: " << v_maj << '.' << v_min << std::endl;
 
-    
+    // Process partitions
+    std::vector<partition_header> partition_headers;
+    std::vector<uint8_t*> partition_datas;
+    for (int i = 0; i < FW_PARTITION_COUNT; ++i)
+    {
+        std::cout << "=== [Processing partition : " << partition_names[i] << "] ===" << std::endl << std::endl;
+
+        auto ini_fw_partition_it = ini_info.find(std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[i]);
+        if (ini_fw_partition_it == ini_info.end())
+        {
+            std::cout << "Partition is not found. Setting as empty." << std::endl << std::endl;
+
+            fw_file_header.partition_infos[i].size_in_fw_file = 0;
+            fw_file_header.partition_infos[i].crc32 = 0;
+            fw_file_header.partition_sizes_in_memory[i] = partition_default_sizes_in_memory[i];
+
+            continue;
+        }
+
+        partition_header partition_header;
+        auto& ini_fw_partition = ini_fw_partition_it->second;
+        
+        // Check if partition is enabled
+        auto partition_enabled_it = ini_fw_partition.find(INI_SECTION__PARTITION__ENABLED);
+        if (partition_enabled_it == ini_fw_partition.end())
+        {
+            std::cout << "Error! Could not find \"" << INI_SECTION__PARTITION__ENABLED << "\" parameter!" << std::endl << std::endl;
+            return;
+        }
+
+        auto& partition_enabled = partition_enabled_it->second;
+        if (partition_enabled == "0")
+        {
+            std::cout << "Partition is disabled. Setting as empty." << std::endl << std::endl;
+
+            fw_file_header.partition_infos[i].size_in_fw_file = 0;
+            fw_file_header.partition_infos[i].crc32 = 0;
+            fw_file_header.partition_sizes_in_memory[i] = partition_default_sizes_in_memory[i];
+
+            continue;
+        }
+
+        if (partition_enabled != "1")
+        {
+            std::cout << "Wrong parameter (\"" << INI_SECTION__PARTITION__ENABLED << '=' << partition_enabled << "\")!" << std::endl << std::endl;
+            return;
+        }
+
+        // Get date
+        auto partition_date_day_it = ini_fw_partition.find(INI_SECTION__PARTITION__DATE_DAY);
+        auto partition_date_month_it = ini_fw_partition.find(INI_SECTION__PARTITION__DATE_MONTH);
+        auto partition_date_year_it = ini_fw_partition.find(INI_SECTION__PARTITION__DATE_YEAR);
+        if (partition_date_day_it == ini_fw_partition.end())
+        {
+            std::cout << "Error! Could not find \"" << INI_SECTION__PARTITION__DATE_DAY << "\" parameter!" << std::endl << std::endl;
+            return;
+        }
+        if (partition_date_month_it == ini_fw_partition.end())
+        {
+            std::cout << "Error! Could not find \"" << INI_SECTION__PARTITION__DATE_MONTH << "\" parameter!" << std::endl << std::endl;
+            return;
+        }
+        if (partition_date_year_it == ini_fw_partition.end())
+        {
+            std::cout << "Error! Could not find \"" << INI_SECTION__PARTITION__DATE_YEAR << "\" parameter!" << std::endl << std::endl;
+            return;
+        }
+        
+        uint32_t partition_date_day = 0;
+        uint32_t partition_date_month = 0;
+        uint32_t partition_date_year = 0;
+        stoi_nothrow(partition_date_day_it->second, partition_date_day);
+        stoi_nothrow(partition_date_month_it->second, partition_date_month);
+        stoi_nothrow(partition_date_year_it->second, partition_date_year);
+        partition_header.date_day = partition_date_day;
+        partition_header.date_month = partition_date_month;
+        partition_header.date_year = partition_date_year;
+
+        // Get data source file name
+        auto partition_source_file_name_it = ini_fw_partition.find(INI_SECTION__PARTITION__SOURCE_FILE_NAME);
+        std::ifstream partition_file(std::string(fw_folder_path) + '/' + partition_source_file_name_it->second, std::ios::in | std::ios::binary | std::ios::ate);
+
+        // Get file size
+        auto data_size = partition_file.tellg();
+        partition_header.data_size = data_size;
+
+        // Seek back to first byte
+        partition_file.seekg(0, std::ios::beg);
+
+        // Read entrie file
+        uint8_t* ptr = new uint8_t[data_size];
+        partition_file.read((char*)ptr, data_size);
+        partition_file.close();
+
+        // Save partition data
+        partition_datas.push_back(ptr);
+
+        // Save partition header
+        partition_headers.push_back(partition_header);
+
+        std::cout << std::endl;
+    }
+
+    std::ofstream fw_file_stream(output_file_name, std::ios::out | std::ios::binary | std::ios::trunc);
+    if (!fw_file_stream.is_open())
+        return;
+
+    // Write firmware file header
+    fw_file_stream.write((char*)&fw_file_header, sizeof(firmware_file_header));
+
+    // Write firmware file partitions
+    for (int i = 0; i < partition_headers.size(); ++i)
+    {
+        // Write partition header
+        fw_file_stream.write((char*)&partition_headers[i], sizeof(partition_header));
+
+        // Write partition data
+        fw_file_stream.write((char*)partition_datas[i], partition_headers[i].data_size);
+    }
+
+    // Clean heap
+    for (auto it = partition_datas.begin(); it != partition_datas.end(); ++it)
+        delete [] *it;
 }
 
 void parsing_process(processing_settings& settings)
