@@ -5,7 +5,21 @@
 #define FW_PARTITION_COUNT 15
 #define PARTITION_HEADER_MAGIC 0xA324EB90
 
+#define INI_SECTION__FW_HEADER "firmware_header"
+#define INI_SECTION_PREFIX__PARTITION "partition : "
+#define INI_SECTION__UNKNOWN_DATA "unknown_data"
+
+#define INI_SECTION__FW_HEADER__MODEL_NAME "model_name"
+#define INI_SECTION__FW_HEADER__VERSION "version"
+
+#define INI_SECTION__PARTITION__ENABLED "enabled"
+#define INI_SECTION__PARTITION__SIZE_IN_MEMORY "size_in_memory"
+#define INI_SECTION__PARTITION__OFFSET_IN_MEMORY "offset_in_memory"
+#define INI_SECTION__PARTITION__SOURCE_FILE_NAME "source_file_name"
+
 const char* output_folder_name = "E1_fw_unpacked";
+
+const char* unpacked_firmware_settings_name = "firmware_info.ini";
 
 const char* partition_names[FW_PARTITION_COUNT]
 {

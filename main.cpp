@@ -4,11 +4,13 @@
 #include <vector>
 #include <iterator>
 #include <algorithm>
+#include <map>
 
 #include <sys/stat.h>
 
 #include "common.h"
 #include "parsing_types.h"
+#include "ini_processing.h"
 
 struct processing_settings
 {
@@ -157,11 +159,13 @@ bool check_parameters(processing_settings& settings)
     return true;
 }
 
-bool parsing_process_unpack_partition(std::ifstream& fw_file_stream, firmware_file_header &fw_header, int partition_index)
+bool parsing_process_unpack_partition(ini_info_t& ini_info, std::ifstream& fw_file_stream, firmware_file_header &fw_header, int partition_index)
 {
     // Reading partiton header
     partition_header partition_header;
     fw_file_stream.read((char*)&partition_header, sizeof(partition_header));
+
+    ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[partition_index]][INI_SECTION__PARTITION__OFFSET_IN_MEMORY] = std::to_string(partition_header.offset_in_device_memory);
 
     std::cout << std::hex;
     std::cout << "CRC32: 0x" << partition_header.crc32 << std::endl;
@@ -176,11 +180,12 @@ bool parsing_process_unpack_partition(std::ifstream& fw_file_stream, firmware_fi
         return false;
     }
 
-    auto fw_partition_name = std::string(output_folder_name) + '/' + partition_names[partition_index] + ".bin";
-    std::ofstream fw_partition_stream(fw_partition_name, std::ios::out | std::ios::binary);
+    ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[partition_index]][INI_SECTION__PARTITION__SOURCE_FILE_NAME] = std::string(partition_names[partition_index]) + ".bin";
+    auto fw_partition_file_path = std::string(output_folder_name) + '/' + partition_names[partition_index] + ".bin";
+    std::ofstream fw_partition_stream(fw_partition_file_path, std::ios::out | std::ios::binary);
     if (!fw_partition_stream.is_open())
     {
-        std::cout << "Error! Could not open file " << fw_partition_name << " for write. Skipping partition..." << std::endl;
+        std::cout << "Error! Could not open file " << fw_partition_file_path << " for write. Skipping partition..." << std::endl;
 
         // Skip partition data
         fw_file_stream.seekg(fw_file_stream.tellg() + partition_header.data_size);
@@ -202,6 +207,9 @@ void parsing_process_unpack(char* fw_file_path)
 {
     std::cout << std::endl << "=== Unpacking process ===" << std::endl << std::endl;
 
+    // Output INI data
+    ini_info_t ini_info;
+
     // Opening firmware file
     std::ifstream fw_file_stream(fw_file_path, std::ios::in | std::ios::binary);
     if (!fw_file_stream.is_open())
@@ -221,12 +229,18 @@ void parsing_process_unpack(char* fw_file_path)
         fw_file_stream.close();
         return;
     }
+
+    ini_info[INI_SECTION__FW_HEADER][INI_SECTION__FW_HEADER__MODEL_NAME] = std::string((char*)fw_header.model_name);
     std::cout << "Model name: " << fw_header.model_name << std::endl;
+
+    ini_info[INI_SECTION__FW_HEADER][INI_SECTION__FW_HEADER__VERSION] = std::to_string(fw_header.version_major) + '.' + std::to_string(fw_header.version_minor);
     std::cout << "Firmware version: " << fw_header.version_major << '.' << fw_header.version_minor << std::endl << std::endl;
 
     std::vector<int> partition_indexes;
     for (int i = 0; i < FW_PARTITION_COUNT; ++i)
     {
+        ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[i]][INI_SECTION__PARTITION__ENABLED] = "0";
+
         std::cout << "> Partition " << i << " (" << partition_names[i] << "):" << std::hex << std::endl;
         std::cout << "Size in FW file: 0x" << fw_header.partition_infos[i].size_in_fw_file << std::endl;
         std::cout << "Size in memory:  0x" << fw_header.partition_sizes_in_memory[i] << std::endl;
@@ -234,11 +248,17 @@ void parsing_process_unpack(char* fw_file_path)
         std::cout << std::dec << std::endl;
 
         if (fw_header.partition_infos[i].size_in_fw_file != 0)
+        {
+            ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[i]][INI_SECTION__PARTITION__ENABLED] = "1";
+            ini_info[std::string(INI_SECTION_PREFIX__PARTITION) + partition_names[i]][INI_SECTION__PARTITION__SIZE_IN_MEMORY] = std::to_string(fw_header.partition_sizes_in_memory[i]);
+
             partition_indexes.push_back(i);
+        }
     }
 
     for (int i = 0; i < 7; ++i)
     {
+        ini_info[INI_SECTION__UNKNOWN_DATA]["u" + std::to_string(i)] = std::to_string(fw_header.unknown[i]);
         std::cout << std::hex << fw_header.unknown[i] << ' ' << std::endl;
     }
 
@@ -252,7 +272,7 @@ void parsing_process_unpack(char* fw_file_path)
     }
 
     // Creating output folder
-    if (mkdir(output_folder_name, S_IRWXU) != 0 && errno != EEXIST)
+    if (mkdir(output_folder_name, S_IRWXU | S_IRWXG | S_IRWXO) != 0 && errno != EEXIST)
     {
         std::cout << "Error! Could not create output folder " << output_folder_name << "!" << std::endl;
         std::cout << "Reason: ";
@@ -307,7 +327,7 @@ void parsing_process_unpack(char* fw_file_path)
         std::cout << ">> Partition starts at offset: " << pre_pos << std::endl;
         std::cout << ">> Expecting partition end offset: " << (uint32_t)pre_pos + fw_header.partition_infos[partition_indexes[i]].size_in_fw_file << std::endl;
 
-        if(!parsing_process_unpack_partition(fw_file_stream, fw_header, partition_indexes[i]))
+        if(!parsing_process_unpack_partition(ini_info, fw_file_stream, fw_header, partition_indexes[i]))
         {
             std::cout << "Error occured while parsing partition." << std::endl;
             fw_file_stream.close();
@@ -324,6 +344,9 @@ void parsing_process_unpack(char* fw_file_path)
             return;
         }
     }
+
+    // Save INI file
+    ini_save(ini_info, std::string(output_folder_name) + '/' + unpacked_firmware_settings_name);
 
     fw_file_stream.close();
 }
