@@ -197,7 +197,7 @@ bool parsing_process_unpack_partition(ini_info_t& ini_info, std::ifstream& fw_fi
         std::cout << "Error! Could not open file " << fw_partition_file_path << " for write. Skipping partition..." << std::endl;
 
         // Skip partition data
-        fw_file_stream.seekg(fw_file_stream.tellg() + partition_header.data_size);
+        fw_file_stream.seekg(fw_file_stream.tellg() + (std::streamoff)partition_header.data_size);
 
         fw_partition_stream.close();
         return true;
